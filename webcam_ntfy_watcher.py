@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 
-CONFIG_FILE = Path("/home/raspiroman/webcam_ntfy_config.json")
+CONFIG_FILE = Path("/home/raspiroman/project/webcam_watcher/webcam_ntfy_config.json")
 
 
 def load_config():
