@@ -44,12 +44,13 @@ echo "Ensuring webcam log root directory exists..."
 sudo mkdir -p "$LOG_ROOT"
 sudo chown www-data:www-data "$LOG_ROOT"
 
-echo "Creating symlink for webcam images (if not existing)..."
-if [ -L "$WEBCAM_LINK" ] || [ -d "$WEBCAM_LINK" ] || [ -e "$WEBCAM_LINK" ]; then
-    echo "  $WEBCAM_LINK existiert bereits, symlink wird nicht neu erstellt."
-else
-    sudo ln -s "$WEBCAM_SRC" "$WEBCAM_LINK"
+echo "Removing existing symbolic link for webcam directory..."
+if [ -L "$WEBCAM_LINK" ]; then
+    sudo rm "$WEBCAM_LINK"
 fi
+echo "Creating symbolic link for webcam directory..."
+sudo ln -s "$WEBCAM_SRC" "$WEBCAM_LINK"
+sudo chown -h www-data:www-data "$WEBCAM_LINK"
 
 echo "Reloading nginx..."
 sudo nginx -t
