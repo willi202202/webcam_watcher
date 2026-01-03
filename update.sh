@@ -1,8 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Pfad zum Projektordner (ANPASSEN!)
-PROJECT_DIR="/home/raspiroman/webcam"
+PROJECT_DIR="/home/raspiroman/project/webcam_watcher"
 SERVICE_SRC="$PROJECT_DIR/systemd/webcam_ntfy.service"
 SERVICE_DST="/etc/systemd/system/webcam_ntfy.service"
 
