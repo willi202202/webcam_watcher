@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import json
+import subprocess
 import time
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
-
 
 CONFIG_FILE = Path("/home/raspiroman/project/webcam_watcher/webcam_ntfy_config.json")
 
@@ -43,9 +43,36 @@ def scan_directory(dir_path: Path, valid_exts):
     }
 
 
+def check_webcam_online(ip: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["ping", "-c", "1", "-W", "2", ip],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def write_status_file(status_path: Path, webcam_ok: bool):
+    status = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "webcam_online": webcam_ok,
+        "watcher_running": True,
+    }
+    try:
+        status_path.parent.mkdir(parents=True, exist_ok=True)
+        status_path.write_text(json.dumps(status), encoding="utf-8")
+    except Exception as e:
+        print(f"[WARN] failed to write status.json: {e}")
+
+
 def main():
     conf = load_config()
 
+    STATUS_FILE = Path(conf["status_file"])
+    WEBCAM_IP = conf["webcam_ip"]
     watch_dir = Path(conf["watch_dir"])
     check_interval = conf.get("check_interval_seconds", 5)
     min_alarm_interval = timedelta(
@@ -67,11 +94,12 @@ def main():
     while True:
         time.sleep(check_interval)
 
-        # Live reload der Config bei jeder Runde ist praktisch 🙂
-        try:
-            conf = load_config()
-        except Exception as e:
-            print(f"[WARN] Konnte Config nicht neu laden: {e}")
+        # Wenn du Config-Änderungen zur Laufzeit willst, kannst du hier nochmal:
+        # conf = load_config()
+        # und dann STATUS_FILE, WEBCAM_IP, usw. neu daraus holen.
+
+        webcam_ok = check_webcam_online(WEBCAM_IP)
+        write_status_file(STATUS_FILE, webcam_ok)
 
         current_files = scan_directory(watch_dir, valid_exts)
         new_files = current_files - known_files

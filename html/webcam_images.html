@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Webcam Bilder</title>
+<title>Webcam</title>
 
 <style>
 body {
@@ -41,8 +41,13 @@ h1 {
 
 </head>
 <body>
-
-<h1>Webcam Bilder</h1>
+<h1>Webcam (Chappelihof 24)</h1>
+<h2>Status</h2>
+<p>
+  Webcam: <span id="webcam-status">prüfe…</span><br>
+  Watcher Script: <span id="script-status">prüfe…</span>
+</p>
+<h2>Bilder</h2>
 <p style="text-align:center;color:#666;">
 Aktualisiert automatisch alle 20 Sekunden.
 </p>
@@ -87,6 +92,34 @@ async function loadImages() {
 }
 
 loadImages();
+</script>
+
+<script>
+function set(el, ok) {
+  el.textContent = ok ? "ONLINE" : "OFFLINE";
+  el.style.color = ok ? "green" : "red";
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch("/webcam/status.json?ts=" + Date.now());
+    const data = await r.json();
+
+    set(document.getElementById("webcam-status"), data.webcam_online);
+
+    // watcher ok, wenn file frisch (< 2 min)
+    const ts = new Date(data.timestamp.replace(" ", "T"));
+    const age = (Date.now() - ts.getTime()) / 1000;
+    set(document.getElementById("script-status"), age < 120);
+
+  } catch (e) {
+    set(document.getElementById("webcam-status"), false);
+    set(document.getElementById("script-status"), false);
+  }
+}
+
+loadStatus();
+setInterval(loadStatus, 20000);
 </script>
 
 </body>

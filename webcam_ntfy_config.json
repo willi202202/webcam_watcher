@@ -9,5 +9,8 @@
   "ntfy_title": "Webcam-Alarm",
   "ntfy_priority": 5,
 
-  "message": "https://roman.willi.my.to/webcam/webcam_images.html"
+  "message": "https://roman.willi.my.to/webcam/webcam_images.html",
+
+  "status_file": "/var/www/webcam/status.json",
+  "webcam_ip": "192.168.1.201"
 }
