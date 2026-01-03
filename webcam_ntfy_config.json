@@ -1,5 +1,5 @@
 {
-  "watch_dir": "/srv/webcam",
+  "watch_dir": "/srv/webcam/upload/",
   "check_interval_seconds": 5,
   "min_alarm_interval_minutes": 10,
 
