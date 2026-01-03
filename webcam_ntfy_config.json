@@ -5,7 +5,7 @@
 
   "valid_extensions": [".jpg", ".jpeg", ".png"],
 
-  "ntfy_topic": "raspiroman",
+  "ntfy_topic": "webcamroman",
   "ntfy_title": "Webcam-Alarm",
   "ntfy_priority": 5,
 
