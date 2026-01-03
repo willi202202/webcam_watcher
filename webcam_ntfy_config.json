@@ -1,0 +1,13 @@
+{
+  "watch_dir": "/srv/webcam",
+  "check_interval_seconds": 5,
+  "min_alarm_interval_minutes": 10,
+
+  "valid_extensions": [".jpg", ".jpeg", ".png"],
+
+  "ntfy_topic": "raspiroman",
+  "ntfy_title": "Webcam-Alarm",
+  "ntfy_priority": 5,
+
+  "message": "https://roman.willi.my.to/webcam/webcam_images.html"
+}

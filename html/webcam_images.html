@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Webcam Bilder</title>
+
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  background: #f3f3f3;
+  margin: 0;
+  padding: 20px;
+}
+h1 {
+  text-align: center;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.card {
+  background: white;
+  padding: 8px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+.card img {
+  width: 100%;
+  border-radius: 10px;
+}
+.filename {
+  font-size: .8em;
+  text-align: center;
+  margin-top: 5px;
+  word-break: break-all;
+}
+</style>
+
+<meta http-equiv="refresh" content="20">
+
+</head>
+<body>
+
+<h1>Webcam Bilder</h1>
+<p style="text-align:center;color:#666;">
+Aktualisiert automatisch alle 20 Sekunden.
+</p>
+
+<div id="gallery" class="grid"></div>
+
+<script>
+const imageBase = "/log/webcam/";
+
+async function loadImages() {
+  const response = await fetch(imageBase);
+  const text = await response.text();
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, "text/html");
+
+  // Find all links ending with jpg/png/jpeg
+  let links = Array.from(doc.querySelectorAll("a"))
+    .map(a => a.getAttribute("href"))
+    .filter(h => h && h.match(/\.(jpg|jpeg|png)$/i))
+    .sort()
+    .reverse(); // newest first (by filename sort)
+
+  const gallery = document.getElementById("gallery");
+  gallery.innerHTML = "";
+
+  for (const file of links) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const img = document.createElement("img");
+    img.src = imageBase + file + "?t=" + Date.now(); // cache busting
+
+    const name = document.createElement("div");
+    name.className = "filename";
+    name.textContent = file;
+
+    card.appendChild(img);
+    card.appendChild(name);
+    gallery.appendChild(card);
+  }
+}
+
+loadImages();
+</script>
+
+</body>
+</html>

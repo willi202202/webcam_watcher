@@ -1,65 +1,93 @@
 #!/usr/bin/env python3
-import os
+import json
 import time
-import requests  # musst du evtl. mit: pip install requests
+import requests
 from pathlib import Path
-
-# === KONFIGURATION ===
-WATCH_DIR = Path("/srv/webcam/upload/webcam")          # Ordner, in dem die Kamera die Bilder ablegt
-NTFY_TOPIC = "raspiroman"                # dein ntfy Topic
-NTFY_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
-CHECK_INTERVAL = 5                       # Sekunden zwischen den Checks
-VALID_EXTENSIONS = {".jpg", ".jpeg", ".png"}  # überwachte Dateitypen
-
-# Optional: Text der Notification
-MESSAGE_TEMPLATE = "Neue Aufnahme von der Webcam: {filename}"
+from datetime import datetime, timedelta
 
 
-def send_ntfy_notification(filename: str):
-    """Schicke eine Nachricht an ntfy."""
-    msg = MESSAGE_TEMPLATE.format(filename=filename)
+CONFIG_FILE = Path("/home/raspiroman/webcam_ntfy_config.json")
+
+
+def load_config():
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def send_ntfy_notification(conf):
+    url = f"https://ntfy.sh/{conf['ntfy_topic']}"
+
+    headers = {
+        "X-Priority": str(conf.get("ntfy_priority", 3)),
+        "X-Title": conf.get("ntfy_title", "Webcam Alarm"),
+    }
+
     try:
         resp = requests.post(
-            NTFY_URL,
-            data=msg.encode("utf-8"),
-            timeout=5,
+            url,
+            data=conf["message"].encode("utf-8"),
+            headers=headers,
+            timeout=8,
         )
         resp.raise_for_status()
-        print(f"[INFO] ntfy-Nachricht gesendet für {filename}")
+        print(f"[{datetime.now()}] ntfy-Nachricht gesendet")
     except Exception as e:
-        print(f"[ERROR] Konnte ntfy-Nachricht nicht senden für {filename}: {e}")
+        print(f"[ERROR] ntfy fehlgeschlagen: {e}")
 
 
-def scan_directory(dir_path: Path):
-    """Gibt ein Set aller Dateien mit gültiger Endung im Verzeichnis zurück."""
+def scan_directory(dir_path: Path, valid_exts):
     return {
         p.name
         for p in dir_path.iterdir()
-        if p.is_file() and p.suffix.lower() in VALID_EXTENSIONS
+        if p.is_file() and p.suffix.lower() in valid_exts
     }
 
 
 def main():
-    print(f"Starte Überwachung von {WATCH_DIR} ...")
-    if not WATCH_DIR.exists():
-        print(f"[ERROR] Verzeichnis existiert nicht: {WATCH_DIR}")
+    conf = load_config()
+
+    watch_dir = Path(conf["watch_dir"])
+    check_interval = conf.get("check_interval_seconds", 5)
+    min_alarm_interval = timedelta(
+        minutes=conf.get("min_alarm_interval_minutes", 10)
+    )
+    valid_exts = set(ext.lower() for ext in conf["valid_extensions"])
+
+    print(f"Überwache: {watch_dir}")
+
+    if not watch_dir.exists():
+        print(f"[ERROR] Verzeichnis existiert nicht: {watch_dir}")
         return
 
-    # Anfangszustand: alle aktuellen Dateien merken (noch keine Meldung)
-    known_files = scan_directory(WATCH_DIR)
-    print(f"Initial {len(known_files)} Dateien gefunden, werden als bekannt markiert.")
+    known_files = scan_directory(watch_dir, valid_exts)
+    print(f"{len(known_files)} bestehende Dateien als bekannt markiert.")
+
+    last_alarm_time = datetime.min
 
     while True:
-        time.sleep(CHECK_INTERVAL)
+        time.sleep(check_interval)
 
-        current_files = scan_directory(WATCH_DIR)
+        # Live reload der Config bei jeder Runde ist praktisch 🙂
+        try:
+            conf = load_config()
+        except Exception as e:
+            print(f"[WARN] Konnte Config nicht neu laden: {e}")
 
-        # Neue Dateien = in current_files, aber nicht in known_files
+        current_files = scan_directory(watch_dir, valid_exts)
         new_files = current_files - known_files
+
         if new_files:
-            for fname in sorted(new_files):
-                print(f"[INFO] Neue Datei erkannt: {fname}")
-                send_ntfy_notification(fname)
+            now = datetime.now()
+            if now - last_alarm_time >= min_alarm_interval:
+                print(f"[INFO] Neue Datei(en): {sorted(new_files)}")
+                send_ntfy_notification(conf)
+                last_alarm_time = now
+            else:
+                remaining = min_alarm_interval - (now - last_alarm_time)
+                print(
+                    f"[INFO] Neue Dateien, aber Cooldown aktiv "
+                    f"(noch {remaining.seconds} s)"
+                )
 
         known_files = current_files
 
