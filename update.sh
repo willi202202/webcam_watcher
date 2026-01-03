@@ -10,7 +10,7 @@ HTML_DST="$HTML_DIR/webcam_images.html"
 
 LOG_ROOT="/var/www/log"
 WEBCAM_LINK="$LOG_ROOT/webcam"
-WEBCAM_SRC="/srv/webcam"
+WEBCAM_SRC="/srv/webcam/upload/webcam"
 
 echo "Starting update process..."
 cd "$PROJECT_DIR"
