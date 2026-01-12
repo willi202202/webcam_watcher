@@ -211,18 +211,18 @@ app = Flask(__name__)
 watcher = WebcamWatcher(CONFIG_FILE)
 
 
-@app.get("/webcam/status")
+@app.get("/webcam_api/status")
 def api_status():
     return jsonify(asdict(watcher.status()))
 
 
-@app.post("/webcam/start")
+@app.post("/webcam_api/start")
 def api_start():
     ok = watcher.start()
     return jsonify({"ok": ok, "running": watcher.is_running()})
 
 
-@app.post("/webcam/stop")
+@app.post("/webcam_api/stop")
 def api_stop():
     ok = watcher.stop(timeout_s=5.0)
     return jsonify({"ok": ok, "running": watcher.is_running()})

@@ -114,7 +114,7 @@ function set(el, ok) {
 
 async function loadStatus() {
   try {
-    const r = await fetch("/webcam/status?ts=" + Date.now());
+    const r = await fetch("/webcam_api/status?ts=" + Date.now());
     const data = await r.json();
 
     set(document.getElementById("webcam-status"), !!data.webcam_online);
