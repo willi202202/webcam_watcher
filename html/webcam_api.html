@@ -50,14 +50,12 @@ h1 {
   <div style="margin-top:10px;">
     <button onclick="apiCmd('/webcam_api/start')">Start</button>
     <button onclick="apiCmd('/webcam_api/stop')">Stop</button>
-  </div>
+    <button onclick="loadStatus()">Status aktualisieren</button>
+    <button onclick="location.reload()">Seite neu laden</button>
+    <button onclick="apiCmd('/webcam_api/test_notify')">Test Benachrichtigung</button>
 
-  <a href="https://cam.roman.willi.my.to" target="_blank"
-   style="display:inline-block; margin-top:10px; padding:10px 16px;
-          background:#e27b7b; color:white; border-radius:8px;
-          text-decoration:none;">
-  Webcam-Admin öffnen
-</a>
+    <button onclick="window.open('https://cam.roman.willi.my.to')">Öffne Webcam-Admin</button>
+  </div>
 </p>
 <h2>Bilder</h2>
 <p style="text-align:center;color:#666;">

@@ -65,7 +65,6 @@ class WebcamWatcher:
         headers["X-Title"] = title or conf.get("ntfy_title", "Webcam Alarm")
         if priority is not None:
             headers["X-Priority"] = str(priority)
-
         try:
             r = requests.post(url, data=message.encode("utf-8"), headers=headers, timeout=8)
             r.raise_for_status()
@@ -76,7 +75,7 @@ class WebcamWatcher:
     def _send_motion_alarm(self) -> None:
         conf = self.conf
         prio = conf.get("ntfy_priority", 3)
-        msg = conf.get("message", "Motion detected")
+        msg = conf.get("ntfy_message", "Motion detected")
         self._send_ntfy(msg, priority=prio, title=conf.get("ntfy_title", "Webcam Alarm"))
 
     @staticmethod
@@ -122,6 +121,11 @@ class WebcamWatcher:
 
         t.join(timeout=timeout_s)
         return not t.is_alive()
+    
+    def test_notify(self) -> None:
+        """Send a test notification."""
+        prio = self.conf.get("ntfy_priority", 3)
+        self._send_ntfy("Dies ist eine Testbenachrichtigung von der Webcam-Watcher App.", priority=prio, title="Webcam Test")
 
     def is_running(self) -> bool:
         t = self._thread
