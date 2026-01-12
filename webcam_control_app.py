@@ -295,7 +295,7 @@ class WebcamWatcher:
 
         finally:
             self._last_webcam_ok = None
-            self._last_webcam_change = now
+            self._last_webcam_change = datetime.now(timezone.utc)
             self.send_event("offline")
             self.send_event("stopped")
             print("[INFO] Watcher stopped.")
