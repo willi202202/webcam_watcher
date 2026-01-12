@@ -122,6 +122,23 @@ class WebcamWatcher:
         t.join(timeout=timeout_s)
         return not t.is_alive()
     
+    def clear_images(self) -> None:
+        """Delete all images in the watch directory."""
+        conf = self.conf
+        watch_dir = Path(conf["watch_dir"])
+        valid_exts = set(ext.lower() for ext in conf["valid_extensions"])
+
+        try:
+            files_to_delete = self._scan_directory(watch_dir, valid_exts)
+            for filename in files_to_delete:
+                file_path = watch_dir / filename
+                file_path.unlink()
+            print(f"[INFO] Deleted {len(files_to_delete)} image files from {watch_dir}.")
+            self._known_files.clear()
+            self._send_ntfy(f"Alle Bilder im Verzeichnis {watch_dir} wurden gelöscht.", title="Webcam Bilder gelöscht")
+        except Exception as e:
+            print(f"[WARN] Failed to clear images: {e}")
+    
     def test_notify(self) -> None:
         """Send a test notification."""
         prio = self.conf.get("ntfy_priority", 3)
@@ -231,6 +248,15 @@ def api_stop():
     ok = watcher.stop(timeout_s=5.0)
     return jsonify({"ok": ok, "running": watcher.is_running()})
 
+@app.post("/webcam_api/test_notify")
+def api_test_notify():
+    watcher.test_notify()
+    return jsonify({"ok": True})
+
+@app.post("/webcam_api/clear_images")
+def api_clear_images():
+    watcher.clear_images()
+    return jsonify({"ok": True})
 
 def _handle_signal(signum, frame):
     # stop watcher so we also get the "Watcher gestoppt" ntfy
