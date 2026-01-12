@@ -295,6 +295,9 @@ class WebcamWatcher:
                 self._known_files = current_files
 
         finally:
+            self._last_webcam_ok = None
+            self._last_webcam_change = now
+            self.send_event("offline")
             self.send_event("stopped")
             print("[INFO] Watcher stopped.")
 
