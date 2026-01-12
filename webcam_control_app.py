@@ -63,34 +63,11 @@ class WebcamWatcher:
         self._last_alarm: Optional[datetime] = None
         self._last_webcam_ok: Optional[bool] = None
         self._last_webcam_change: Optional[datetime] = None
+        self._health_hist: list[bool] = []
 
     def load_config(self) -> dict[str, Any]:
         conf = json.loads(self.config_path.read_text(encoding="utf-8"))
-        self._validate_config(conf)
         return conf
-
-    def _validate_config(self, conf: dict[str, Any]) -> None:
-        required_top = ["watch_dir", "valid_extensions", "webcam_ip", "api_listen_host", "api_listen_port", "ntfy"]
-        for k in required_top:
-            if k not in conf:
-                raise ConfigError(f"Missing config key: {k}")
-
-        ntfy = conf["ntfy"]
-        if not isinstance(ntfy, dict):
-            raise ConfigError("ntfy must be an object")
-
-        for k in ["server", "topic", "templates"]:
-            if k not in ntfy:
-                raise ConfigError(f"Missing ntfy key: {k}")
-
-        if not isinstance(ntfy.get("templates"), dict):
-            raise ConfigError("ntfy.templates must be an object")
-
-        # We use these events in code:
-        needed_events = ["started", "stopped", "online", "offline", "motion", "test", "cleared"]
-        for ev in needed_events:
-            if ev not in ntfy["templates"]:
-                raise ConfigError(f"Missing ntfy.templates.{ev}")
 
     # ---------- ntfy (template-driven) ----------
 
@@ -161,14 +138,11 @@ class WebcamWatcher:
         }
 
     @staticmethod
-    def _check_webcam_online(ip: str) -> bool:
+    def _check_webcam_once(self) -> bool:
+        hc = self.conf["webcam_health"]
         try:
-            r = subprocess.run(
-                ["ping", "-c", "1", "-W", "2", ip],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            return r.returncode == 0
+            r = requests.get(hc["url"], timeout=float(hc.get("timeout", 3)))
+            return r.status_code < 500
         except Exception:
             return False
 
@@ -277,6 +251,8 @@ class WebcamWatcher:
         self._last_alarm = None
         self._last_webcam_ok = None
         self._last_webcam_change = None
+        self._health_hist = []
+        n = int(self.conf["webcam_health"].get("hysteresis", 1))
 
         self.send_event("started")
 
@@ -285,7 +261,15 @@ class WebcamWatcher:
                 time.sleep(check_interval)
 
                 # webcam status
-                webcam_ok = self._check_webcam_online(webcam_ip)
+                raw = self._check_webcam_once()
+                self._health_hist.append(raw)
+                # nur die letzten n Werte behalten
+                self._health_hist = self._health_hist[-n:]
+                # Mehrheitsentscheid
+                if len(self._health_hist) == n:
+                    webcam_ok = sum(self._health_hist) >= (n // 2 + 1)
+                else:
+                    webcam_ok = raw   # noch nicht genug Messungen
 
                 if self._last_webcam_ok is None:
                     self._last_webcam_ok = webcam_ok
