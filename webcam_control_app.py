@@ -120,63 +120,51 @@ class WebcamWatcher:
             self._stop.set()
 
         t.join(timeout=timeout_s)
-        return not t.is_alive()
+        return not t.is_alive() 
     
     def clear_images(self) -> None:
-        """Delete all images in the watch directory.
-
-        This is robust against file-specific errors: it will try to delete each
-        file individually, attempt to fix permissions on PermissionError and
-        continue deleting the rest. It reports which files (if any) failed.
-        """
+        """Delete all images in the watch directory."""
         conf = self.conf
         watch_dir = Path(conf["watch_dir"])
         valid_exts = set(ext.lower() for ext in conf["valid_extensions"])
 
+        deleted = 0
+        failed = 0
+
         try:
-            files_to_delete = self._scan_directory(watch_dir, valid_exts)
-        except Exception as e:
-            print(f"[WARN] initial scan for clearing images failed: {e}")
-            return
+            files = self._scan_directory(watch_dir, valid_exts)
 
-        deleted = []
-        failed = []
-
-        for filename in files_to_delete:
-            file_path = watch_dir / filename
-            try:
-                try:
-                    file_path.unlink()
-                except PermissionError:
-                    # try to make the file writable and retry once
+            with self._lock:
+                for fname in files:
+                    fpath = watch_dir / fname
                     try:
-                        os.chmod(file_path, 0o666)
-                        file_path.unlink()
+                        fpath.unlink()
+                        deleted += 1
+                        print(f"[INFO] Deleted file: {fpath}")
                     except Exception as e:
-                        raise e
-                deleted.append(filename)
-            except Exception as e:
-                print(f"[WARN] Failed to delete {file_path}: {e}")
-                failed.append(filename)
+                        failed += 1
+                        print(f"[WARN] Failed to delete file {fpath}: {e}")
 
-        if deleted:
-            print(f"[INFO] Deleted {len(deleted)} image files from {watch_dir}.")
-            for fn in deleted:
-                self._known_files.discard(fn)
-            try:
-                self._send_ntfy(f"{len(deleted)} Bilder im Verzeichnis {watch_dir} wurden gelöscht.", title="Webcam Bilder gelöscht")
-            except Exception as e:
-                print(f"[WARN] ntfy failed after clearing images: {e}")
+                # Nacharbeiten: was ist wirklich noch da?
+                try:
+                    self._known_files = self._scan_directory(watch_dir, valid_exts)
+                except Exception:
+                    # fallback: wenigstens nicht mit alten Daten weiterlaufen
+                    self._known_files = set()
 
-        if failed:
-            print(f"[WARN] Could not delete {len(failed)} files: {sorted(failed)}")
-            try:
-                self._send_ntfy(f"Nicht alle Bilder konnten gelöscht werden: {', '.join(sorted(failed))}", priority=1, title="Webcam Bilder gelöscht (teils fehlgeschlagen)")
-            except Exception as e:
-                print(f"[WARN] ntfy failed after partial clear: {e}")
+            if failed == 0:
+                self._send_ntfy(f"Alle Bilder geloescht ({deleted}).", title="Webcam Watcher")
+            else:
+                self._send_ntfy(
+                    f"Bilder geloescht: {deleted}, fehlgeschlagen: {failed}. "
+                    f"(Berechtigungen/Owner pruefen: ftpuser?)",
+                    title="Webcam Watcher",
+                    priority=3,
+                )
 
-        if not deleted and not failed:
-            print(f"[INFO] No image files found in {watch_dir} to delete.")
+        except Exception as e:
+            print(f"[WARN] Failed to clear images: {e}")
+            self._send_ntfy(f"Loeschen fehlgeschlagen: {e}", title="Webcam Watcher", priority=3)
     
     def test_notify(self) -> None:
         """Send a test notification."""
