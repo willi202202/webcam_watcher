@@ -2,9 +2,9 @@
 """Webcam watcher + control API (Flask) in one process.
 
 Endpoints:
-  GET  /webcam-api/status
-  POST /webcam-api/start
-  POST /webcam-api/stop
+  GET  /webcam/status
+  POST /webcam/start
+  POST /webcam/stop
 
 Notes:
 - No status file is written anymore.
@@ -211,18 +211,18 @@ app = Flask(__name__)
 watcher = WebcamWatcher(CONFIG_FILE)
 
 
-@app.get("/webcam-api/status")
+@app.get("/webcam/status")
 def api_status():
     return jsonify(asdict(watcher.status()))
 
 
-@app.post("/webcam-api/start")
+@app.post("/webcam/start")
 def api_start():
     ok = watcher.start()
     return jsonify({"ok": ok, "running": watcher.is_running()})
 
 
-@app.post("/webcam-api/stop")
+@app.post("/webcam/stop")
 def api_stop():
     ok = watcher.stop(timeout_s=5.0)
     return jsonify({"ok": ok, "running": watcher.is_running()})
