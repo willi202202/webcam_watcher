@@ -229,7 +229,6 @@ class WebcamWatcher:
     def _run(self) -> None:
         conf = self.conf
         watch_dir = Path(conf["watch_dir"])
-        webcam_ip = conf["webcam_ip"]
         check_interval = int(conf.get("check_interval_seconds", 5))
         min_alarm_interval = timedelta(minutes=int(conf.get("min_alarm_interval_minutes", 10)))
         valid_exts = set(ext.lower() for ext in conf["valid_extensions"])
