@@ -17,12 +17,12 @@
     "defaults": { "title": "Webcam", "priority": 3, "tags": ["camera"] },
     "templates": {
       "started": { "title": "Watcher", "priority": 2, "tags": ["white_check_mark"], "message": "Watcher gestartet" },
-      "stopped": { "title": "Watcher", "priority": 2, "tags": ["x"], "message": "Watcher gestoppt" },
+      "stopped": { "title": "Watcher", "priority": 4, "tags": ["x"], "message": "Watcher gestoppt" },
       "online":  { "title": "Webcam", "priority": 2, "tags": ["white_check_mark"], "message": "Webcam ist ONLINE" },
       "offline": { "title": "Webcam", "priority": 4, "tags": ["x"], "message": "Webcam ist OFFLINE" },
       "motion":  { "title": "Webcam ALARM", "priority": 5, "tags": ["rotating_light"], "message": "{web_url}" },
       "cleared": { "title": "Webcam", "priority": 2, "tags": ["broom"], "message": "Alle Bilder geloescht ({deleted}). Failed: {failed}" },
-      "test":    { "title": "Webcam TEST ALARM", "priority": 2, "tags": ["pushpin"], "message": "Test: {web_url}" }
+      "test":    { "title": "Webcam TEST ALARM", "priority": 5, "tags": ["pushpin"], "message": "Test: {web_url}" }
     }
   }
 }
