@@ -60,7 +60,7 @@ class WebcamWatcher:
 
     def _send_ntfy(self, message: str, priority=None, title=None) -> None:
         conf = self.conf
-        url = f"https://ntfy.sh/{conf['ntfy_topic']}"
+        url = f"{conf['ntfy_server']}/{conf['ntfy_topic']}"
         headers = {}
         headers["X-Title"] = title or conf.get("ntfy_title", "Webcam Alarm")
         if priority is not None:
@@ -241,6 +241,8 @@ if __name__ == "__main__":
 
     # optional: auto-start watcher on boot of this service
     watcher.start()
+    host = watcher.conf.get("api_listen_host", "127.0.0.1")
+    port = watcher.conf.get("api_listen_port", 5055)
 
     # bind locally; put nginx in front if needed
-    app.run(host="127.0.0.1", port=5055)
+    app.run(host=host, port=port)
