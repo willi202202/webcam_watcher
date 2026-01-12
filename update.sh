@@ -2,16 +2,12 @@
 set -euo pipefail
 
 PROJECT_DIR="/home/raspiroman/project/webcam_watcher"
-SERVICE_SRC="$PROJECT_DIR/systemd/webcam_ntfy.service"
-SERVICE_DST="/etc/systemd/system/webcam_ntfy.service"
+SERVICE_SRC="$PROJECT_DIR/systemd/webcam_control_app.service"
+SERVICE_DST="/etc/systemd/system/webcam_control_app.service"
 
-HTML_SRC="$PROJECT_DIR/html/webcam_images.html"
+HTML_SRC="$PROJECT_DIR/html/webcam_api.html"
 HTML_DIR="/var/www/webcam"
-HTML_DST="$HTML_DIR/webcam_images.html"
-
-STAT_SRC="$PROJECT_DIR/html/status.json"
-STAT_DIR="$HTML_DIR"
-STAT_DST="$STAT_DIR/status.json"
+HTML_DST="$HTML_DIR/webcam_api.html"
 
 LOG_ROOT="/var/www/log"
 WEBCAM_LINK="$LOG_ROOT/webcam"
@@ -23,20 +19,21 @@ cd "$PROJECT_DIR"
 echo "Pulling latest changes from Git repository..."
 git pull origin main
 
-echo "Making webcam_ntfy_watcher.py executable..."
-chmod +x "$PROJECT_DIR/webcam_ntfy_watcher.py"
+echo "Making webcam_control_app.py executable..."
+chmod +x "$PROJECT_DIR/webcam_control_app.py"
 
-echo "Updating webcam_ntfy.service..."
+echo "Updating webcam_control_app.service..."
 sudo cp "$SERVICE_SRC" "$SERVICE_DST"
 
 echo "Reloading systemd daemon..."
 sudo systemctl daemon-reload
 
-echo "Enabling and restarting webcam_ntfy.service..."
-sudo systemctl enable --now webcam_ntfy.service
+echo "Enabling and restarting webcam_control_app.service..."
+#sudo systemctl disable --now webcam_ntfy.service
+sudo systemctl enable --now webcam_control_app.service
 
-echo "Status of webcam_ntfy.service:"
-sudo systemctl status webcam_ntfy.service --no-pager || true
+echo "Status of webcam_control_app.service:"
+sudo systemctl status webcam_control_app.service --no-pager || true
 
 echo "Ensuring HTML directory exists..."
 sudo mkdir -p "$HTML_DIR"
@@ -44,13 +41,9 @@ sudo mkdir -p "$HTML_DIR"
 echo "Updating webcam_images.html..."
 sudo cp "$HTML_SRC" "$HTML_DST"
 
-echo "Updating status.json template..."
-sudo cp "$STAT_SRC" "$STAT_DST"
-
 echo "Fixing ownership and permissions for /var/www/webcam..."
 sudo chown -R raspiroman:www-data "$HTML_DIR"
 sudo chmod 775 "$HTML_DIR"
-sudo chmod 664 "$HTML_DST" "$STAT_DST"
 
 echo "Ensuring webcam log root directory exists..."
 sudo mkdir -p "$LOG_ROOT"

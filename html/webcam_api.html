@@ -47,6 +47,11 @@ h1 {
 <p>
   Webcam: <span id="webcam-status">prüfe…</span><br>
   Watcher Script: <span id="script-status">prüfe…</span><br>
+  <div style="margin-top:10px;">
+    <button onclick="apiCmd('/api/start')">Start</button>
+    <button onclick="apiCmd('/api/stop')">Stop</button>
+  </div>
+
   <a href="https://cam.roman.willi.my.to" target="_blank"
    style="display:inline-block; margin-top:10px; padding:10px 16px;
           background:#e27b7b; color:white; border-radius:8px;
@@ -109,21 +114,30 @@ function set(el, ok) {
 
 async function loadStatus() {
   try {
-    const r = await fetch("/webcam/status.json?ts=" + Date.now());
+    const r = await fetch("/api/status?ts=" + Date.now());
     const data = await r.json();
 
-    set(document.getElementById("webcam-status"), data.webcam_online);
-
-    // watcher ok, wenn file frisch (< 2 min)
-    const ts = new Date(data.timestamp.replace(" ", "T"));
-    const age = (Date.now() - ts.getTime()) / 1000;
-    set(document.getElementById("script-status"), age < 120);
+    set(document.getElementById("webcam-status"), !!data.webcam_online);
+    set(document.getElementById("script-status"), !!data.watcher_running);
 
   } catch (e) {
     set(document.getElementById("webcam-status"), false);
     set(document.getElementById("script-status"), false);
   }
 }
+
+async function apiCmd(path) {
+  try {
+    const r = await fetch(path, { method: "POST" });
+    const data = await r.json();
+    // refresh status immediately after command
+    await loadStatus();
+    console.log("apiCmd", path, data);
+  } catch (e) {
+    console.error("apiCmd failed", path, e);
+  }
+}
+
 
 loadStatus();
 setInterval(loadStatus, 20000);

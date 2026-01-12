@@ -1,11 +1,11 @@
-# /etc/systemd/system/webcam_ntfy.service
+# /etc/systemd/system/webcam_control_app.service
 [Unit]
 Description=Webcam FTP Ordner überwachen und ntfy-Benachrichtigung senden
 
 [Service]
 Type=simple
 User=raspiroman
-ExecStart=/usr/bin/python3 /home/raspiroman/project/webcam_watcher/webcam_ntfy_watcher.py
+ExecStart=/usr/bin/python3 /home/raspiroman/project/webcam_watcher/webcam_control_app.py
 Restart=always
 
 [Install]
