@@ -12,7 +12,7 @@ Notes:
 - Config is reloaded from JSON on each start.
 """
 from __future__ import annotations
-
+import os
 import json
 import signal
 import subprocess
@@ -123,21 +123,60 @@ class WebcamWatcher:
         return not t.is_alive()
     
     def clear_images(self) -> None:
-        """Delete all images in the watch directory."""
+        """Delete all images in the watch directory.
+
+        This is robust against file-specific errors: it will try to delete each
+        file individually, attempt to fix permissions on PermissionError and
+        continue deleting the rest. It reports which files (if any) failed.
+        """
         conf = self.conf
         watch_dir = Path(conf["watch_dir"])
         valid_exts = set(ext.lower() for ext in conf["valid_extensions"])
 
         try:
             files_to_delete = self._scan_directory(watch_dir, valid_exts)
-            for filename in files_to_delete:
-                file_path = watch_dir / filename
-                file_path.unlink()
-            print(f"[INFO] Deleted {len(files_to_delete)} image files from {watch_dir}.")
-            self._known_files.clear()
-            self._send_ntfy(f"Alle Bilder im Verzeichnis {watch_dir} wurden gelöscht.", title="Webcam Bilder gelöscht")
         except Exception as e:
-            print(f"[WARN] Failed to clear images: {e}")
+            print(f"[WARN] initial scan for clearing images failed: {e}")
+            return
+
+        deleted = []
+        failed = []
+
+        for filename in files_to_delete:
+            file_path = watch_dir / filename
+            try:
+                try:
+                    file_path.unlink()
+                except PermissionError:
+                    # try to make the file writable and retry once
+                    try:
+                        os.chmod(file_path, 0o666)
+                        file_path.unlink()
+                    except Exception as e:
+                        raise e
+                deleted.append(filename)
+            except Exception as e:
+                print(f"[WARN] Failed to delete {file_path}: {e}")
+                failed.append(filename)
+
+        if deleted:
+            print(f"[INFO] Deleted {len(deleted)} image files from {watch_dir}.")
+            for fn in deleted:
+                self._known_files.discard(fn)
+            try:
+                self._send_ntfy(f"{len(deleted)} Bilder im Verzeichnis {watch_dir} wurden gelöscht.", title="Webcam Bilder gelöscht")
+            except Exception as e:
+                print(f"[WARN] ntfy failed after clearing images: {e}")
+
+        if failed:
+            print(f"[WARN] Could not delete {len(failed)} files: {sorted(failed)}")
+            try:
+                self._send_ntfy(f"Nicht alle Bilder konnten gelöscht werden: {', '.join(sorted(failed))}", priority=1, title="Webcam Bilder gelöscht (teils fehlgeschlagen)")
+            except Exception as e:
+                print(f"[WARN] ntfy failed after partial clear: {e}")
+
+        if not deleted and not failed:
+            print(f"[INFO] No image files found in {watch_dir} to delete.")
     
     def test_notify(self) -> None:
         """Send a test notification."""
