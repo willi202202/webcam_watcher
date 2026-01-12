@@ -2,17 +2,27 @@
   "watch_dir": "/srv/webcam/upload/",
   "check_interval_seconds": 5,
   "min_alarm_interval_minutes": 10,
-
   "valid_extensions": [".jpg", ".jpeg", ".png"],
 
-  "ntfy_server": "https://ntfy.sh",
-  "ntfy_topic": "webcamroman",
-  "ntfy_title": "Webcam-Alarm",
-  "ntfy_priority": 5,
-  "ntfy_message": "https://roman.willi.my.to/webcam/webcam_api.html",
-
   "webcam_ip": "192.168.1.201",
+  "web_url": "https://roman.willi.my.to/webcam/webcam_api.html",
 
-  "api_listen_host": "127.0.0.1", 
-  "api_listen_port": 5055
+  "api_listen_host": "127.0.0.1",
+  "api_listen_port": 5055,
+
+  "ntfy": {
+    "server": "https://ntfy.sh",
+    "topic": "webcamroman",
+
+    "defaults": { "title": "Webcam", "priority": 3, "tags": ["camera"] },
+    "templates": {
+      "started": { "title": "Watcher", "priority": 2, "tags": ["play"], "message": "Watcher gestartet" },
+      "stopped": { "title": "Watcher", "priority": 2, "tags": ["stop"], "message": "Watcher gestoppt" },
+      "online":  { "title": "Webcam Status", "priority": 2, "tags": ["green_circle"], "message": "Webcam ist ONLINE" },
+      "offline": { "title": "Webcam Status", "priority": 4, "tags": ["red_circle","warning"], "message": "Webcam ist OFFLINE" },
+      "motion":  { "title": "Webcam-Alarm", "priority": 5, "tags": ["rotating_light"], "message": "{web_url}" },
+      "cleared": { "title": "Webcam", "priority": 2, "tags": ["broom"], "message": "Alle Bilder geloescht ({deleted}). Failed: {failed}" },
+      "test":    { "title": "Webcam", "priority": 2, "tags": ["test_tube"], "message": "Test: {web_url}" }
+    }
+  }
 }

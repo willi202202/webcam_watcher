@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Webcam watcher + control API (Flask) in one process.
+"""Webcam watcher + control API (Flask) in one process (strict config, no legacy keys).
 
 Endpoints:
-  GET  /webcam/status
-  POST /webcam/start
-  POST /webcam/stop
+  GET  /status
+  POST /start
+  POST /stop
+  POST /test_notify
+  POST /clear_images
 
 Notes:
-- No status file is written anymore.
+- No status file is used.
 - Watcher runs in a background thread.
-- Config is reloaded from JSON on each start.
+- Config is reloaded from webcam_config.json on each start.
+- ntfy messages are fully driven by config templates (title/priority/tags/message).
 """
+
 from __future__ import annotations
-import os
+
 import json
 import signal
 import subprocess
@@ -21,13 +25,14 @@ import threading
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional, Set
+from typing import Any, Optional, Set, Iterable
 
 import requests
 from flask import Flask, jsonify
 
 
-CONFIG_FILE = Path(r"/home/raspiroman/project/webcam_watcher/webcam_config.json")
+# Adjust if you move the file:
+CONFIG_FILE = Path("/home/raspiroman/project/webcam_watcher/webcam_config.json")
 
 
 @dataclass
@@ -40,6 +45,10 @@ class WatcherStatus:
     known_files_count: int
 
 
+class ConfigError(RuntimeError):
+    pass
+
+
 class WebcamWatcher:
     def __init__(self, config_path: Path):
         self.config_path = config_path
@@ -48,35 +57,100 @@ class WebcamWatcher:
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
-        self.conf: dict = {}
-
+        # runtime state
+        self.conf: dict[str, Any] = self.load_config()
         self._known_files: Set[str] = set()
         self._last_alarm: Optional[datetime] = None
         self._last_webcam_ok: Optional[bool] = None
         self._last_webcam_change: Optional[datetime] = None
 
-    def load_config(self) -> dict:
-        return json.loads(self.config_path.read_text(encoding="utf-8"))
+    def load_config(self) -> dict[str, Any]:
+        conf = json.loads(self.config_path.read_text(encoding="utf-8"))
+        self._validate_config(conf)
+        return conf
 
-    def _send_ntfy(self, message: str, priority=None, title=None) -> None:
-        conf = self.conf
-        url = f"{conf['ntfy_server']}/{conf['ntfy_topic']}"
-        headers = {}
-        headers["X-Title"] = title or conf.get("ntfy_title", "Webcam Alarm")
-        if priority is not None:
-            headers["X-Priority"] = str(priority)
+    def _validate_config(self, conf: dict[str, Any]) -> None:
+        required_top = ["watch_dir", "valid_extensions", "webcam_ip", "api_listen_host", "api_listen_port", "ntfy"]
+        for k in required_top:
+            if k not in conf:
+                raise ConfigError(f"Missing config key: {k}")
+
+        ntfy = conf["ntfy"]
+        if not isinstance(ntfy, dict):
+            raise ConfigError("ntfy must be an object")
+
+        for k in ["server", "topic", "templates"]:
+            if k not in ntfy:
+                raise ConfigError(f"Missing ntfy key: {k}")
+
+        if not isinstance(ntfy.get("templates"), dict):
+            raise ConfigError("ntfy.templates must be an object")
+
+        # We use these events in code:
+        needed_events = ["started", "stopped", "online", "offline", "motion", "test", "cleared"]
+        for ev in needed_events:
+            if ev not in ntfy["templates"]:
+                raise ConfigError(f"Missing ntfy.templates.{ev}")
+
+    # ---------- ntfy (template-driven) ----------
+
+    def _ntfy_url(self) -> str:
+        ntfy = self.conf["ntfy"]
+        server = str(ntfy["server"]).rstrip("/")
+        topic = str(ntfy["topic"]).strip().strip("/")
+        return f"{server}/{topic}"
+
+    def _merge_ntfy_defaults(self, tpl: dict[str, Any]) -> dict[str, Any]:
+        ntfy = self.conf["ntfy"]
+        defaults = ntfy.get("defaults") if isinstance(ntfy.get("defaults"), dict) else {}
+        merged = dict(defaults)
+        merged.update(tpl or {})
+        return merged
+
+    def _format_message(self, msg: str, vars_: dict[str, Any]) -> str:
         try:
-            r = requests.post(url, data=message.encode("utf-8"), headers=headers, timeout=8)
-            r.raise_for_status()
-            print(f"[{datetime.now()}] ntfy sent: {message}")
+            return str(msg).format(**vars_)
         except Exception as e:
-            print(f"[WARN] ntfy failed: {e}")
+            # still send something useful
+            return f"{msg} (format error: {e})"
 
-    def _send_motion_alarm(self) -> None:
-        conf = self.conf
-        prio = conf.get("ntfy_priority", 3)
-        msg = conf.get("ntfy_message", "Motion detected")
-        self._send_ntfy(msg, priority=prio, title=conf.get("ntfy_title", "Webcam Alarm"))
+    def send_event(self, name: str, **fmt: Any) -> None:
+        ntfy = self.conf["ntfy"]
+        tpl = ntfy["templates"][name]
+        cfg = self._merge_ntfy_defaults(tpl)
+
+        vars_ = dict(self.conf)
+        vars_.update(fmt)
+
+        # convenience
+        if "web_url" in self.conf:
+            vars_["web_url"] = self.conf["web_url"]
+
+        message = self._format_message(cfg.get("message", ""), vars_)
+        title = cfg.get("title", None)
+        priority = cfg.get("priority", None)
+        tags = cfg.get("tags", None)
+
+        headers = {}
+        if title:
+            headers["Title"] = str(title)
+        if priority is not None:
+            headers["Priority"] = str(priority)
+
+        if tags:
+            if isinstance(tags, (list, tuple, set)):
+                headers["Tags"] = ",".join(str(t) for t in tags if str(t).strip())
+            else:
+                headers["Tags"] = str(tags)
+
+        try:
+            r = requests.post(self._ntfy_url(), data=message.encode("utf-8"), headers=headers, timeout=8)
+            r.raise_for_status()
+            print(f"[{datetime.now()}] ntfy({name}) sent")
+        except Exception as e:
+            print(f"[WARN] ntfy({name}) failed: {e}")
+
+    # ---------- watcher helpers ----------
 
     @staticmethod
     def _scan_directory(dir_path: Path, valid_exts: Set[str]) -> Set[str]:
@@ -98,15 +172,16 @@ class WebcamWatcher:
         except Exception:
             return False
 
+    # ---------- public control ----------
+
     def start(self) -> bool:
         """Start the watcher thread (no-op if already running)."""
         with self._lock:
             if self._thread and self._thread.is_alive():
                 return False
 
-            self.conf = self.load_config()
+            self.conf = self.load_config()  # reload config on start
             self._stop.clear()
-
             self._thread = threading.Thread(target=self._run, name="WebcamWatcher", daemon=True)
             self._thread.start()
             return True
@@ -120,56 +195,7 @@ class WebcamWatcher:
             self._stop.set()
 
         t.join(timeout=timeout_s)
-        return not t.is_alive() 
-    
-    def clear_images(self) -> None:
-        """Delete all images in the watch directory."""
-        conf = self.conf
-        watch_dir = Path(conf["watch_dir"])
-        valid_exts = set(ext.lower() for ext in conf["valid_extensions"])
-
-        deleted = 0
-        failed = 0
-
-        try:
-            files = self._scan_directory(watch_dir, valid_exts)
-
-            with self._lock:
-                for fname in files:
-                    fpath = watch_dir / fname
-                    try:
-                        fpath.unlink()
-                        deleted += 1
-                        print(f"[INFO] Deleted file: {fpath}")
-                    except Exception as e:
-                        failed += 1
-                        print(f"[WARN] Failed to delete file {fpath}: {e}")
-
-                # Nacharbeiten: was ist wirklich noch da?
-                try:
-                    self._known_files = self._scan_directory(watch_dir, valid_exts)
-                except Exception:
-                    # fallback: wenigstens nicht mit alten Daten weiterlaufen
-                    self._known_files = set()
-
-            if failed == 0:
-                self._send_ntfy(f"Alle Bilder geloescht ({deleted}).", title="Webcam Watcher")
-            else:
-                self._send_ntfy(
-                    f"Bilder geloescht: {deleted}, fehlgeschlagen: {failed}. "
-                    f"(Berechtigungen/Owner pruefen: ftpuser?)",
-                    title="Webcam Watcher",
-                    priority=3,
-                )
-
-        except Exception as e:
-            print(f"[WARN] Failed to clear images: {e}")
-            self._send_ntfy(f"Loeschen fehlgeschlagen: {e}", title="Webcam Watcher", priority=3)
-    
-    def test_notify(self) -> None:
-        """Send a test notification."""
-        prio = self.conf.get("ntfy_priority", 3)
-        self._send_ntfy("Dies ist eine Testbenachrichtigung von der Webcam-Watcher App.", priority=prio, title="Webcam Test")
+        return not t.is_alive()
 
     def is_running(self) -> bool:
         t = self._thread
@@ -186,9 +212,48 @@ class WebcamWatcher:
             known_files_count=len(self._known_files),
         )
 
+    def test_notify(self) -> None:
+        self.send_event("test")
+
+    def clear_images(self) -> dict[str, int]:
+        conf = self.conf
+        watch_dir = Path(conf["watch_dir"])
+        valid_exts = set(ext.lower() for ext in conf["valid_extensions"])
+
+        deleted = 0
+        failed = 0
+
+        try:
+            files = self._scan_directory(watch_dir, valid_exts)
+
+            with self._lock:
+                for fname in files:
+                    fpath = watch_dir / fname
+                    try:
+                        fpath.unlink()
+                        deleted += 1
+                    except Exception as e:
+                        failed += 1
+                        print(f"[WARN] Failed to delete {fpath}: {e}")
+
+                # rescan for truth
+                try:
+                    self._known_files = self._scan_directory(watch_dir, valid_exts)
+                except Exception:
+                    self._known_files = set()
+
+            self.send_event("cleared", deleted=deleted, failed=failed)
+            return {"deleted": deleted, "failed": failed}
+
+        except Exception as e:
+            print(f"[WARN] clear_images failed: {e}")
+            self.send_event("cleared", deleted=deleted, failed=failed, error=str(e))
+            return {"deleted": deleted, "failed": failed}
+
+    # ---------- main loop ----------
+
     def _run(self) -> None:
         conf = self.conf
-
         watch_dir = Path(conf["watch_dir"])
         webcam_ip = conf["webcam_ip"]
         check_interval = int(conf.get("check_interval_seconds", 5))
@@ -201,7 +266,6 @@ class WebcamWatcher:
             print(f"[ERROR] Directory does not exist: {watch_dir}")
             return
 
-        # existing files are known
         try:
             self._known_files = self._scan_directory(watch_dir, valid_exts)
             print(f"[INFO] {len(self._known_files)} existing files marked as known.")
@@ -214,7 +278,7 @@ class WebcamWatcher:
         self._last_webcam_ok = None
         self._last_webcam_change = None
 
-        self._send_ntfy("Webcam-Watcher gestartet", title="Watcher")
+        self.send_event("started")
 
         try:
             while not self._stop.is_set():
@@ -229,10 +293,7 @@ class WebcamWatcher:
                 elif webcam_ok != self._last_webcam_ok:
                     self._last_webcam_ok = webcam_ok
                     self._last_webcam_change = datetime.now(timezone.utc)
-                    self._send_ntfy(
-                        "Webcam ist ONLINE" if webcam_ok else "Webcam ist OFFLINE",
-                        title="Webcam Status",
-                    )
+                    self.send_event("online" if webcam_ok else "offline")
 
                 # new files
                 current_files = self._scan_directory(watch_dir, valid_exts)
@@ -242,15 +303,14 @@ class WebcamWatcher:
                     now = datetime.now(timezone.utc)
                     if now - last_alarm_time >= min_alarm_interval:
                         print(f"[INFO] New file(s): {sorted(new_files)}")
-                        self._send_motion_alarm()
+                        self.send_event("motion")
                         last_alarm_time = now
                         self._last_alarm = now
-                    # else: cooldown -> ignore
 
                 self._known_files = current_files
 
         finally:
-            self._send_ntfy("Webcam-Watcher gestoppt", title="Watcher")
+            self.send_event("stopped")
             print("[INFO] Watcher stopped.")
 
 
@@ -259,34 +319,36 @@ app = Flask(__name__)
 watcher = WebcamWatcher(CONFIG_FILE)
 
 
-@app.get("/webcam_api/status")
+@app.get("/status")
 def api_status():
     return jsonify(asdict(watcher.status()))
 
 
-@app.post("/webcam_api/start")
+@app.post("/start")
 def api_start():
     ok = watcher.start()
     return jsonify({"ok": ok, "running": watcher.is_running()})
 
 
-@app.post("/webcam_api/stop")
+@app.post("/stop")
 def api_stop():
     ok = watcher.stop(timeout_s=5.0)
     return jsonify({"ok": ok, "running": watcher.is_running()})
 
-@app.post("/webcam_api/test_notify")
+
+@app.post("/test_notify")
 def api_test_notify():
     watcher.test_notify()
     return jsonify({"ok": True})
 
-@app.post("/webcam_api/clear_images")
+
+@app.post("/clear_images")
 def api_clear_images():
-    watcher.clear_images()
-    return jsonify({"ok": True})
+    res = watcher.clear_images()
+    return jsonify({"ok": True, **res})
+
 
 def _handle_signal(signum, frame):
-    # stop watcher so we also get the "Watcher gestoppt" ntfy
     print(f"[INFO] signal {signum} received, shutting down...")
     watcher.stop(timeout_s=5.0)
     raise SystemExit(0)
@@ -296,10 +358,13 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    # optional: auto-start watcher on boot of this service
-    watcher.start()
-    host = watcher.conf.get("api_listen_host", "127.0.0.1")
-    port = watcher.conf.get("api_listen_port", 5055)
+    # load config for API host/port
+    watcher.conf = watcher.load_config()
 
-    # bind locally; put nginx in front if needed
+    # optional: auto-start watcher when this service starts
+    watcher.start()
+
+    host = watcher.conf["api_listen_host"]
+    port = int(watcher.conf["api_listen_port"])
+
     app.run(host=host, port=port)
