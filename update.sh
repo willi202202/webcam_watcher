@@ -29,7 +29,7 @@ echo "Reloading systemd daemon..."
 sudo systemctl daemon-reload
 
 echo "Enabling and restarting webcam_control_app.service..."
-#sudo systemctl disable --now webcam_ntfy.service
+#sudo systemctl disable --now webcam_control_app.service
 sudo systemctl enable --now webcam_control_app.service
 
 echo "Status of webcam_control_app.service:"

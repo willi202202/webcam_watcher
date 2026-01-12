@@ -27,7 +27,7 @@ import requests
 from flask import Flask, jsonify
 
 
-CONFIG_FILE = Path(r"/mnt/data/webcam_config.json")  # adjust if you move the file
+CONFIG_FILE = Path(r"/home/raspiroman/project/webcam_watcher/webcam_config.json")
 
 
 @dataclass
