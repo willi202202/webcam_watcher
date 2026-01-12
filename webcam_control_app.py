@@ -137,7 +137,6 @@ class WebcamWatcher:
             if p.is_file() and p.suffix.lower() in valid_exts
         }
 
-    @staticmethod
     def _check_webcam_once(self) -> bool:
         hc = self.conf["webcam_health"]
         try:
