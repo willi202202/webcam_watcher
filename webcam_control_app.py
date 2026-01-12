@@ -290,6 +290,7 @@ class WebcamWatcher:
                 if self._last_webcam_ok is None:
                     self._last_webcam_ok = webcam_ok
                     self._last_webcam_change = datetime.now(timezone.utc)
+                    self.send_event("online" if webcam_ok else "offline")
                 elif webcam_ok != self._last_webcam_ok:
                     self._last_webcam_ok = webcam_ok
                     self._last_webcam_change = datetime.now(timezone.utc)

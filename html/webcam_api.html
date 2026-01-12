@@ -45,16 +45,15 @@ h1 {
 <h1>Webcam (Chappelihof 24)</h1>
 <h2>Status</h2>
 <p>
-  Webcam: <span id="webcam-status">prüfe…</span><br>
-  Watcher Script: <span id="script-status">prüfe…</span><br>
+  Webcam: <span id="webcam-status">check...</span><br>
+  Watcher Script: <span id="script-status">check...</span><br>
   <div style="margin-top:10px;">
     <button onclick="apiCmd('/webcam_api/start')">Start</button>
     <button onclick="apiCmd('/webcam_api/stop')">Stop</button>
-    <button onclick="loadStatus()">Status aktualisieren</button>
-    <button onclick="location.reload()">Seite neu laden</button>
-    <button onclick="apiCmd('/webcam_api/test_notify')">Test Benachrichtigung</button>
-    <button onclick="apiCmd('/webcam_api/clear_images')">Bilder löschen</button>
-    <button onclick="window.open('https://cam.roman.willi.my.to')">Öffne Webcam-Admin</button>
+    <button onclick="location.reload()">Reload</button>
+    <button onclick="apiCmd('/webcam_api/test_notify')">Test Alarm</button>
+    <button onclick="apiCmd('/webcam_api/clear_images')">Clear Images</button>
+    <button onclick="window.open('https://cam.roman.willi.my.to')">Webcam-Admin</button>
   </div>
 </p>
 <h2>Bilder</h2>
